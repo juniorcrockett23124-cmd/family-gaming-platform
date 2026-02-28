@@ -1,7 +1,7 @@
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useWebSocket } from '../hooks/useWebSocket';
-import { useState } from 'react';
-import type { ClientMessage } from '../types/messages';
+import { useState, useMemo } from 'react';
+import { getGame } from '../games/registry';
 
 const STATUS_COLORS: Record<string, string> = {
   connecting: '#f59e0b',
@@ -20,35 +20,27 @@ const STATUS_TEXT: Record<string, string> = {
 export default function Room() {
   const { roomCode } = useParams<{ roomCode: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const userId = localStorage.getItem('userId') || '';
   const [showCopied, setShowCopied] = useState(false);
-
   const { connectionState, roomState, sendMessage, reconnect } = useWebSocket(roomCode || '');
 
-  const handleCellClick = (index: number) => {
+  const gameType = useMemo(() => {
+    return (location.state as { gameType?: string })?.gameType || roomState?.gameType || '';
+  }, [location.state, roomState?.gameType]);
+
+  const gameDefinition = useMemo(() => {
+    return gameType ? getGame(gameType) : undefined;
+  }, [gameType]);
+
+  const handleMakeMove = (move: unknown) => {
     if (connectionState !== 'connected') return;
-    if (!roomState) return;
-    if (roomState.status !== 'active') return;
-    if (roomState.board[index] !== null) return;
-
-    const player = roomState.players.find(p => p.userId === userId);
-    if (!player || player.symbol !== roomState.turn) return;
-
-    const msg: ClientMessage = {
-      type: 'make_move',
-      userId,
-      index,
-    };
-    sendMessage(msg);
+    sendMessage({ type: 'make_move', userId, move });
   };
 
   const handleRestart = () => {
     if (connectionState !== 'connected') return;
-    const msg: ClientMessage = {
-      type: 'restart_game',
-      userId,
-    };
-    sendMessage(msg);
+    sendMessage({ type: 'restart_game', userId });
   };
 
   const copyRoomCode = () => {
@@ -64,24 +56,32 @@ export default function Room() {
 
   const statusMessage = () => {
     if (isWaiting) return 'Waiting for opponent...';
-    if (roomState?.status === 'active') {
-      return myTurn ? 'Your turn!' : "Opponent's turn";
-    }
+    if (roomState?.status === 'active') return myTurn ? 'Your turn!' : "Opponent's turn";
     if (isFinished) {
-      if (roomState?.winner) {
-        return roomState.winner === currentPlayer?.symbol ? 'You won! 🎉' : 'You lost 😢';
-      }
-      return "It's a draw! 🤝";
+      if (roomState?.winner) return roomState.winner === currentPlayer?.symbol ? 'You won!' : 'You lost';
+      return "It's a draw!";
     }
     return '';
   };
 
+  const gameBoard = useMemo(() => {
+    if (!roomState || !gameDefinition) return null;
+    return gameDefinition.renderBoard({
+      state: roomState as any,
+      myPlayerId: userId,
+      mySymbol: currentPlayer?.symbol || '',
+      onMove: handleMakeMove,
+      disabled: connectionState !== 'connected',
+    });
+  }, [roomState, gameDefinition, userId, currentPlayer?.symbol, connectionState]);
+
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', padding: '20px', fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}>
-      {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,0.95)', padding: '15px 25px', borderRadius: '15px', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '15px', flexWrap: 'wrap' }}>
-          <h1 style={{ margin: 0, fontSize: '22px', color: '#333' }}>🎮 Tic-Tac-Toe</h1>
+          <h1 style={{ margin: 0, fontSize: '22px', color: '#333' }}>
+            {gameDefinition?.displayName || 'Game Room'}
+          </h1>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <span style={{ color: '#666', fontSize: '14px' }}>Room:</span>
             <code onClick={copyRoomCode} style={{ background: '#f0f0f0', padding: '6px 12px', borderRadius: '8px', fontSize: '16px', fontWeight: 'bold', letterSpacing: '2px', color: '#667eea', cursor: 'pointer' }}>
@@ -96,14 +96,14 @@ export default function Room() {
             {STATUS_TEXT[connectionState]}
           </div>
           {connectionState === 'offline' && (
-            <button onClick={reconnect} style={{ padding: '8px 16px', background: '#667eea', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: 600 }}>Reconnect</button>
+            <button onClick={reconnect} style={{ padding: '8px 16px', background: '#667eea', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: 600 }}>
+              Reconnect
+            </button>
           )}
         </div>
       </div>
 
-      {/* Game Area */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '25px' }}>
-        {/* Players */}
         {roomState && (
           <div style={{ display: 'flex', gap: '40px', padding: '20px 40px', background: 'rgba(255,255,255,0.95)', borderRadius: '15px', alignItems: 'center' }}>
             {roomState.players.map((p) => (
@@ -118,42 +118,22 @@ export default function Room() {
           </div>
         )}
 
-        {/* Status Message */}
         {roomState && (
           <div style={{ fontSize: '20px', fontWeight: 700, color: 'white', textShadow: '0 2px 4px rgba(0,0,0,0.3)', padding: '0 20px', textAlign: 'center' }}>
             {statusMessage()}
           </div>
         )}
 
-        {/* Game Board */}
-        {roomState && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', width: '320px', height: '320px' }}>
-            {roomState.board.map((cell, index) => {
-              const isWinning = roomState.winningCells?.includes(index);
-              return (
-                <button
-                  key={index}
-                  onClick={() => handleCellClick(index)}
-                  disabled={!myTurn || cell !== null || isFinished}
-                  style={{ width: '100%', height: '100%', fontSize: '48px', fontWeight: 'bold', border: 'none', borderRadius: '12px', cursor: cell === null && myTurn && !isFinished ? 'pointer' : 'default', background: isWinning ? '#10b981' : 'rgba(255,255,255,0.95)', color: cell === 'X' ? '#667eea' : '#764ba2', transition: 'transform 0.1s', boxShadow: isWinning ? '0 0 20px #10b981' : '0 4px 10px rgba(0,0,0,0.2)' }}
-                >
-                  {cell}
-                </button>
-              );
-            })}
-          </div>
-        )}
+        {gameBoard}
 
-        {/* Restart Button */}
         {isFinished && (
           <button onClick={handleRestart} style={{ padding: '16px 40px', fontSize: '18px', fontWeight: 600, background: 'white', color: '#667eea', border: 'none', borderRadius: '12px', cursor: 'pointer', boxShadow: '0 8px 20px rgba(0,0,0,0.2)' }}>
             Play Again
           </button>
         )}
 
-        {/* Leave Button */}
         <button onClick={() => navigate('/')} style={{ padding: '12px 30px', fontSize: '14px', fontWeight: 600, background: 'rgba(0,0,0,0.3)', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', marginTop: '20px' }}>
-          ← Leave Room
+          Leave Room
         </button>
       </div>
     </div>
