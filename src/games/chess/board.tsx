@@ -95,8 +95,8 @@ export function ChessBoard({
         gridTemplateColumns: 'repeat(8, 1fr)',
         gap: '2px',
         width: '100%',
-        maxWidth: '520px',
-        height: '520px',
+        maxWidth: '430px',
+        height: '430px',
         background: '#1f2937',
         padding: '6px',
         borderRadius: '12px',
@@ -127,7 +127,7 @@ export function ChessBoard({
                 justifyContent: 'center',
                 userSelect: 'none',
                 position: 'relative',
-                height: '61px'
+                height: '50px'
               }}
             >
               {piece ? PIECES[piece.color][piece.type] : ''}
