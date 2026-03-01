@@ -4,6 +4,7 @@ import { ticTacToe3PieceGame } from './tictactoe-3piece';
 import { hangmanGame } from './hangman';
 import { chessGameDefinition } from './chess';
 import { rockPaperScissorsGame } from './rockpaperscissors';
+import { dotsAndBoxesGame } from './dotsandboxes';
 
 // Central registry of all available games
 export const gameRegistry: GameRegistry = {
@@ -12,6 +13,7 @@ export const gameRegistry: GameRegistry = {
   [hangmanGame.id]: hangmanGame,
   [chessGameDefinition.id]: chessGameDefinition,
   [rockPaperScissorsGame.id]: rockPaperScissorsGame,
+  [dotsAndBoxesGame.id]: dotsAndBoxesGame,
 };
 
 // Helper functions
