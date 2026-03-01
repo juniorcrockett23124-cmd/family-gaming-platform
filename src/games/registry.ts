@@ -2,12 +2,14 @@ import type { GameDefinition, GameRegistry } from './types';
 import { ticTacToeGame } from './tictactoe';
 import { ticTacToe3PieceGame } from './tictactoe-3piece';
 import { hangmanGame } from './hangman';
+import { chessGameDefinition } from './chess';
 
 // Central registry of all available games
 export const gameRegistry: GameRegistry = {
   [ticTacToeGame.id]: ticTacToeGame,
   [ticTacToe3PieceGame.id]: ticTacToe3PieceGame,
   [hangmanGame.id]: hangmanGame,
+  [chessGameDefinition.id]: chessGameDefinition,
 };
 
 // Helper functions
